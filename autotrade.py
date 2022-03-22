@@ -1,8 +1,8 @@
 import datetime
-import os
 import time
 
 import pyupbit
+import requests
 import schedule
 
 from inference import predict_arima, predict_prophet
@@ -18,16 +18,25 @@ print("autotrade start")
 ticker = "KRW-BTC"
 tic = "BTC"
 
+# slack
+myToken = ""
+def post_message(token, channel, text):
+    '''post message to slack channel'''
+    response = requests.post("https://slack.com/api/chat.postMessage",
+        header = {"Authorization": "Bearer " + token},
+        data = {"channel": channel, "text": text}
+    )
+
 
 def get_start_time(ticker):
-    ''' start time '''
+    '''start time '''
     df = pyupbit.get_ohlcv(ticker, interval='day', count=1)
     start_time = df.index[0]
     return start_time
 
 
 def get_balance(ticker):
-    ''' get balance '''
+    '''get balance '''
     balances = upbit.get_balance()
     print(balances)
     for b in balances:
@@ -39,7 +48,7 @@ def get_balance(ticker):
 
 
 def get_current_price(ticker):
-    ''' current price '''
+    '''current price '''
     return pyupbit.get_orderbook(tickers=ticker)[0]['orderbook_units'][0]['ask_price']
 
 
@@ -73,8 +82,9 @@ while True:
             if future_price > current_price:
                 krw = get_balance("KRW")
                 if krw > 1000: # 최소 주문 가능 금액
-                    upbit.buy_marker_order(ticker, krw*0.9995) # 수수료 0.05%
-            
+                    buy_result = upbit.buy_marker_order(ticker, krw*0.9995) # 수수료 0.05%
+                    post_message(myToken, "", "BTC buy: " + str(buy_result))
+
             # if future price is lower than current price, pass this time
             else:
                 pass
@@ -83,7 +93,9 @@ while True:
             if now.minute % 15 == 0:
                 btc = get_balance(tic)
                 if btc > 0.00008:
-                    upbit.sell_market_order(ticker, btc*0.9995) # 수수료 0.05 고려
+                    sell_result = upbit.sell_market_order(ticker, btc*0.9995) # 수수료 0.05 고려
+                    post_message(myToken, "", "BTC sell: " + str(sell_result))
+        
         else:
             break
         
@@ -92,5 +104,6 @@ while True:
 
     except Exception as e:
         print(e)
+        post_message(myToken, "", e)
         time.sleep(1)
 
